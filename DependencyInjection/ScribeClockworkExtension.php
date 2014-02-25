@@ -57,9 +57,15 @@ class ScribeClockworkExtension extends Extension
             $config['enable_ssl']
         );
 
+        $container->setParameter(
+            'scribe_clockwork.invalid_character_action',
+            $config['invalid_character_action']
+        );
 
-
-
+        $container->setParameter(
+            'scribe_clockwork.log_activity',
+            $config['log_activity']
+        );
 
         $loader = new YamlFileLoader(
             $container, 
