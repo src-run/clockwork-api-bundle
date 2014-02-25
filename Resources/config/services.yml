@@ -1,0 +1,7 @@
+parameters:
+    scribe.clockwork.class: Scribe\ClockworkBundle\Component\Clockwork
+
+services:
+    scribe.clockwork:
+        class: %scribe.clockwork.class%
+        parameters: [ "@service_container" ]

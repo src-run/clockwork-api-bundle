@@ -1,0 +1,21 @@
+{
+    "name": "scribe/clockwork-bundle",
+    "description": "Symfony bundle to handle interaction with clockworksms.com for SMS messaging",
+    "keywords": ["Symfony2", "Clockwork", "Scribe"],
+    "type": "symfony-bundle",
+    "homepage": "https://github.com/scribenet/ScribeClockworkBundle",
+    "license": "MIT",
+    "authors": [{
+        "name" : "Rob Frawley 2nd",
+        "email" : "rfrawley@scribenet.com",
+        "homepage": "http://www.scribenet.com"
+    }],
+    "require": {
+        "symfony/framework-bundle" : ">=2.0",
+        "symfony/monolog-bridge"   : ">=2.0"
+    },
+    "autoload": {
+        "psr-0": { "Scribe\\ClockworkBundle": "" }
+    },
+    "target-dir": "Scribe/ClockworkBundle"
+}
