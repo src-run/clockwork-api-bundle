@@ -21,6 +21,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ***
 
+# ISC License
+
 **Copyright (c) 2011 - 2012, Mediaburst Ltd <hello@mediaburst.co.uk>**
 
 Permission to use, copy, modify, and/or distribute this software for any
