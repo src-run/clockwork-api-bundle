@@ -136,61 +136,41 @@ class Clockwork implements ContainerAwareInterface
      * @param  string $message
      * @return integer
      */
-    public function send($phone, $message, $clientId = null)
+    public function send($phone, $message, $client_id = null)
     {
-        $request = $this->createDocument();
-
-        $root = $request->createElement('Message');
-        $request->appendChild($root);
-
-        $userNode = $request->createElement('Key');
-        $userNode->appendChild($request->createTextNode($this->api_key));
-        $root->appendChild($userNode);
-
-        $smsNode = $request->createElement('SMS');
-
         if (!$this->isValidMSISDN($phone)) {
             throw new ClockworkException('The phone number must be a valid MSISDN');
         }
 
-        $smsNode->appendChild($request->createElement('To', $phone));
-
-        $contentNode = $request->createElement('Content');
-        $contentNode->appendChild($request->createTextNode($message));
-        $smsNode->appendChild($contentNode);
-
-        if ($clientId !== null) {
-            $clientIdNode = $request->createElement('ClientID');
-            $clientIdNode->appendChild($request->createTextNode($clientId));
-            $smsNode->appendChild($clientIdNode);
-        }
-
         if (strlen($this->from_address) > 11) {
-            $this->from_address = substr($this->from_address, 0, 11);
+            throw new ClockworkException('The from address must be no longer than 11 alphanumeric characters');
         }
-        $fromNode = $request->createElement('From');
-        $fromNode->appendChild($request->createTextNode($this->from_address));
-        $smsNode->appendChild($fromNode);
 
-        $longNode = $request->createElement('Long');
-        $longNode->appendChild($request->createTextNode($this->allow_long_messages ? 1 : 0));
-        $smsNode->appendChild($longNode);
-
-        $truncateNode = $request->createElement('Truncate');
-        $truncateNode->appendChild($request->createTextNode($this->truncate_long_messages ? 1 : 0));
-        $smsNode->appendChild($truncateNode);
-
-        if ($this->invalid_character_action == 'error') {
-            $invalid_character_action_int = 1;
-        } else if ($this->invalid_character_action == 'remove') {
+        if ($this->invalid_character_action == 'replace_character') {
+            $invalid_character_action_int = 3;
+        } else if ($this->invalid_character_action == 'remove_character') {
             $invalid_character_action_int = 2;
         } else {
-            $invalid_character_action_int = 3;
+            $invalid_character_action_int = 1;
         }
 
-        $smsNode->appendChild($request->createElement('InvalidCharAction', $invalid_character_action_int));
+        $request = $this->createDocument();
 
-        $root->appendChild($smsNode);
+        $root = $this->createDocumentElement($request, 'Message', null, null);
+        $request->appendChild($root);
+
+        $node_user         = $this->createDocumentElement($request, 'Key',               null,                         $this->api_key,                          $root);
+        $node_sms          = $this->createDocumentElement($request, 'SMS',               null,                         null,                                    $root);
+        $node_to           = $this->createDocumentElement($request, 'To',                null,                         $phone,                                  $node_sms);
+        $node_content      = $this->createDocumentElement($request, 'Content',           null,                         $message,                                $node_sms);
+        $node_from         = $this->createDocumentElement($request, 'From',              null,                         $this->from_address,                     $node_sms);
+        $node_long         = $this->createDocumentElement($request, 'Long',              null,                         ($this->allow_long_messages ? 1 : 0),    $node_sms);
+        $node_truncate     = $this->createDocumentElement($request, 'Truncate',          null,                         ($this->truncate_long_messages ? 1 : 0), $node_sms);
+        $node_invalid_char = $this->createDocumentElement($request, 'InvalidCharAction', $invalid_character_action_int, null,                                   $node_sms);
+
+        if ($client_id !== null) {
+            $node_client_id = $this->createDocumentElement($request, 'ClientID', null, $client_id, $node_sms);
+        }
 
         list($response, $error_number, $error_message)
             = $this->post(self::API_METHOD_SMS, $request)
@@ -200,26 +180,26 @@ class Clockwork implements ContainerAwareInterface
             throw new ClockworkAPIException($error_number, $error_message);
         }
 
-        $message_id         = null;
+        $message_id        = null;
         $sms_error_number  = null;
         $sms_error_message = null;
 
         foreach ($response->documentElement->childNodes as $child) {
             switch ($child->nodeName) {
                 case 'SMS_Resp':
+
+                    list($sms_error_number, $sms_error_message)
+                        = $this->elementParseError($child)
+                    ;
+
                     foreach ($child->childNodes as $smsChild) {
                         switch ($smsChild->nodeName) {
                             case 'MessageID':
                                 $message_id = $smsChild->nodeValue;
                                 break;
-                            case 'ErrNo':
-                                $sms_error_number = $smsChild->nodeValue;
-                                break;
-                            case 'ErrDesc':
-                                $sms_error_message = $smsChild->nodeValue;
-                                break;
                         }
                     }
+
                     break;
             }
         }
@@ -239,9 +219,10 @@ class Clockwork implements ContainerAwareInterface
     {
         $request = $this->createDocument();
 
-        $authenticate = $request->createElement('Authenticate');
-        $authenticate->appendChild($request->createElement('Key', $this->api_key));
-        $request->appendChild($authenticate);
+        $root = $this->createDocumentElement($request, 'Authenticate');
+        $request->appendChild($root);
+
+        $node_key = $this->createDocumentElement($request, 'Key', $this->api_key, null, $root);
 
         list($response, $error_number, $error_message)
             = $this->post(self::API_METHOD_AUTH, $request)
@@ -257,13 +238,14 @@ class Clockwork implements ContainerAwareInterface
     /**
      * @return string
      */
-    public function checkCredit()
+    public function getCredit()
     {
         $request = $this->createDocument();
 
-        $root = $request->createElement('Credit');
-        $root->appendChild($request->createElement('Key', $this->api_key));
+        $root = $this->createDocumentElement($request, 'Credit');
         $request->appendChild($root);
+
+        $node_key = $this->createDocumentElement($request, 'Key', $this->api_key, null, $root);
 
         list($response, $error_number, $error_message)
             = $this->post(self::API_METHOD_CREDIT, $request)
@@ -289,13 +271,14 @@ class Clockwork implements ContainerAwareInterface
     /**
      * @return string
      */
-    public function checkBalance()
+    public function getBalance()
     {
         $request = $this->createDocument();
 
-        $root = $request->createElement('Balance');
-        $root->appendChild($request->createElement('Key', $this->api_key));
+        $root = $this->createDocumentElement($request, 'Balance');
         $request->appendChild($root);
+
+        $node_key = $this->createDocumentElement($request, 'Key', $this->api_key, null, $root);
 
         list($response, $error_number, $error_message)
             = $this->post(self::API_METHOD_BALANCE, $request)
@@ -344,20 +327,20 @@ class Clockwork implements ContainerAwareInterface
      */
     private function post($method, \DOMDocument $document) 
     {
-        $data     = $this->destroyDocument($document);
-        $protocol = $this->enable_ssl ? 'https://' : 'http://';
-        $url      = $protocol . self::API_BASE_URL . $method;
-
         if (!extension_loaded('curl')) {
             throw new ClockworkException('Clockwork requires the Curl PHP module is loaded');
         }
+
+        $data     = $this->destroyDocument($document);
+        $protocol = $this->enable_ssl ? 'https://' : 'http://';
+        $url      = $protocol . self::API_BASE_URL . $method;
 
         $handle = curl_init($url);
 
         curl_setopt($handle, CURLOPT_POST,           1);
         curl_setopt($handle, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($handle, CURLOPT_HTTPHEADER,     ["Content-Type: text/xml"]);
-        curl_setopt($handle, CURLOPT_USERAGENT,      'ScribeClockworkBundle/1.0');
+        curl_setopt($handle, CURLOPT_USERAGENT,      'ScribeClockworkBundle/1.0.2');
         curl_setopt($handle, CURLOPT_POSTFIELDS,     $data);
 
         $responseData = curl_exec($handle);
@@ -385,6 +368,30 @@ class Clockwork implements ContainerAwareInterface
     }
 
     /**
+     * @param  DOMElement $element
+     * @return array
+     */
+    private function parseError(\DOMElement $element)
+    {
+        $error_number  = null;
+        $error_message = null;
+
+        switch ($element->nodeName) {
+            case 'ErrNo':
+                $error_number = $element->nodeValue;
+                break;
+            case 'ErrDesc':
+                $error_message = $element->nodeValue;
+                break;
+        }
+
+        return [
+            $error_number,
+            $error_message
+        ];
+    }
+
+    /**
      * @param  DOMDocument $document
      * @return array
      */
@@ -394,14 +401,26 @@ class Clockwork implements ContainerAwareInterface
         $error_message = null;
 
         foreach ($document->documentElement->childNodes as $child) {
-            switch ($child->nodeName) {
-                case 'ErrNo':
-                    $error_number = $child->nodeValue;
-                    break;
-                case 'ErrDesc':
-                    $error_message = $child->nodeValue;
-                    break;
-            }
+            list($error_number, $error_message) = $this->parseError($child);
+        }
+
+        return [
+            $error_number,
+            $error_message
+        ];
+    }
+
+    /**
+     * @param  DOMElement $element
+     * @return array
+     */
+    private function elementParseError(\DOMElement $element)
+    {
+        $error_number  = null;
+        $error_message = null;
+
+        foreach ($element->childNodes as $child) {
+            list($error_number, $error_message) = $this->parseError($child);
         }
 
         return [
@@ -432,6 +451,33 @@ class Clockwork implements ContainerAwareInterface
     private function destroyDocument(\DOMDocument $document)
     {
         return $document->saveXML();
+    }
+
+    /**
+     * @param  DOMDocument     $document
+     * @param  string          $element_name
+     * @param  null|string     $element_value
+     * @param  null|string     $child_element
+     * @param  null|DOMElement $append_to_element
+     * @return DOMElement
+     */
+    private function createDocumentElement(\DOMDocument $document, $element_name, $element_value = null, $child_element = null, \DOMElement $append_to_element = null)
+    {
+        $child = $document->createElement($element_name);
+
+        if ($element_value !== null) {
+            $child->nodeValue = $element_value;
+        }
+
+        if ($child_element !== null) {
+            $child->appendChild($document->createTextNode($child_element));
+        }
+
+        if ($append_to_element !== null) {
+            $append_to_element->appendChild($child);
+        }
+
+        return $child;
     }
 
     /**
