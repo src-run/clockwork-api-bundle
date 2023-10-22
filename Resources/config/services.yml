@@ -3,5 +3,5 @@ parameters:
 
 services:
     scribe.clockwork:
-        class: %scribe.clockwork.class%
+        class: '%scribe.clockwork.class%'
         arguments: [ "@service_container" ]
